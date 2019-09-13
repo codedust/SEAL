@@ -12,6 +12,7 @@
 #include "seal/memorymanager.h"
 #include "seal/context.h"
 #include "seal/publickey.h"
+#include "seal/secretkey.h"
 #include "seal/util/smallntt.h"
 
 namespace seal
@@ -56,6 +57,19 @@ namespace seal
         Encryptor(std::shared_ptr<SEALContext> context, const PublicKey &public_key);
 
         /**
+        Creates an Encryptor instance initialized with the specified SEALContext,
+        public key and secret key (used for symmetric encryption).
+
+        @param[in] context The SEALContext
+        @param[in] public_key The public key
+        @param[in] secret_key The secret key
+        @throws std::invalid_argument if the context is not set or encryption
+        parameters are not valid
+        @throws std::invalid_argument if public_key is not valid
+        */
+        Encryptor(std::shared_ptr<SEALContext> context, const PublicKey &public_key, const SecretKey &secret_key);
+
+        /**
         Encrypts a plaintext and stores the result in the destination parameter.
         Dynamic memory allocations in the process are allocated from the memory
         pool pointed to by the given MemoryPoolHandle.
@@ -68,6 +82,21 @@ namespace seal
         @throws std::invalid_argument if pool is uninitialized
         */
         void encrypt(const Plaintext &plain, Ciphertext &destination,
+            MemoryPoolHandle pool = MemoryManager::GetPool());
+
+        /**
+        Encrypts a plaintext and stores the result in the destination parameter.
+        Dynamic memory allocations in the process are allocated from the memory
+        pool pointed to by the given MemoryPoolHandle.
+
+        @param[in] plain The plaintext to encrypt
+        @param[out] destination The ciphertext to overwrite with the encrypted plaintext
+        @param[in] pool The MemoryPoolHandle pointing to a valid memory pool
+        @throws std::invalid_argument if plain is not valid for the encryption parameters
+        @throws std::invalid_argument if plain is not in default NTT form
+        @throws std::invalid_argument if pool is uninitialized
+        */
+        void encrypt_symmetric(const Plaintext &plain, Ciphertext &destination,
             MemoryPoolHandle pool = MemoryManager::GetPool());
 
         /**
@@ -85,6 +114,7 @@ namespace seal
         void encrypt_zero(
             parms_id_type parms_id,
             Ciphertext &destination,
+            bool symmetric = false,
             MemoryPoolHandle pool = MemoryManager::GetPool());
 
         /**
@@ -121,5 +151,9 @@ namespace seal
         std::shared_ptr<SEALContext> context_{ nullptr };
 
         PublicKey public_key_;
+
+        SecretKey secret_key_;
+
+        bool secret_key_set_ = false;
     };
 }

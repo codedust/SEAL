@@ -55,7 +55,8 @@ void example_bfv_basics()
     In this example we use a relatively small polynomial modulus. Anything
     smaller than this will enable only very restricted encrypted computations.
     */
-    size_t poly_modulus_degree = 4096;
+    //size_t poly_modulus_degree = 4096;
+    size_t poly_modulus_degree = 32768;
     parms.set_poly_modulus_degree(poly_modulus_degree);
 
     /*
@@ -117,7 +118,8 @@ void example_bfv_basics()
     The plaintext modulus is specific to the BFV scheme, and cannot be set when
     using the CKKS scheme.
     */
-    parms.set_plain_modulus(256);
+    //parms.set_plain_modulus(256);
+    parms.set_plain_modulus(32);
 
     /*
     Now that all parameters are set, we are ready to construct a SEALContext
@@ -157,7 +159,7 @@ void example_bfv_basics()
     To be able to encrypt we need to construct an instance of Encryptor. Note
     that the Encryptor only requires the public key, as expected.
     */
-    Encryptor encryptor(context, public_key);
+    Encryptor encryptor(context, public_key, secret_key);
 
     /*
     Computations on the ciphertexts are performed with the Evaluator class. In
@@ -208,7 +210,7 @@ void example_bfv_basics()
     print_line(__LINE__);
     Ciphertext x_encrypted;
     cout << "Encrypt x_plain to x_encrypted." << endl;
-    encryptor.encrypt(x_plain, x_encrypted);
+    encryptor.encrypt_symmetric(x_plain, x_encrypted);
 
     /*
     In Microsoft SEAL, a valid ciphertext consists of two or more polynomials

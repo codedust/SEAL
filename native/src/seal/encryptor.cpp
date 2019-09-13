@@ -36,6 +36,41 @@ namespace seal
         {
             throw invalid_argument("public key is not valid for encryption parameters");
         }
+        if (secret_key_set_) {
+            throw invalid_argument("this should never happen (secret_key_set_ error)");
+        }
+
+        auto &parms = context_->key_context_data()->parms();
+        auto &coeff_modulus = parms.coeff_modulus();
+        size_t coeff_count = parms.poly_modulus_degree();
+        size_t coeff_mod_count = coeff_modulus.size();
+
+        // Quick sanity check
+        if (!product_fits_in(coeff_count, coeff_mod_count, size_t(2)))
+        {
+            throw logic_error("invalid parameters");
+        }
+    }
+
+    Encryptor::Encryptor(shared_ptr<SEALContext> context,
+        const PublicKey &public_key, const SecretKey &secret_key) :
+        context_(move(context)), public_key_(public_key), secret_key_(secret_key)
+    {
+        secret_key_set_ = true;
+
+        // Verify parameters
+        if (!context_)
+        {
+            throw invalid_argument("invalid context");
+        }
+        if (!context_->parameters_set())
+        {
+            throw invalid_argument("encryption parameters are not set correctly");
+        }
+        if (public_key.parms_id() != context_->key_parms_id())
+        {
+            throw invalid_argument("public key is not valid for encryption parameters");
+        }
 
         auto &parms = context_->key_context_data()->parms();
         auto &coeff_modulus = parms.coeff_modulus();
@@ -51,6 +86,7 @@ namespace seal
 
     void Encryptor::encrypt_zero(parms_id_type parms_id,
         Ciphertext &destination,
+        bool symmetric,
         MemoryPoolHandle pool)
     {
         // Verify parameters.
@@ -90,8 +126,16 @@ namespace seal
 
             // Zero encryption without modulus switching
             Ciphertext temp(pool);
-            encrypt_zero_asymmetric(public_key_, context_, prev_parms_id,
-                random, is_ntt_form, temp, pool);
+            if (symmetric)
+            {
+              encrypt_zero_symmetric(secret_key_, context_, prev_parms_id,
+                  random, is_ntt_form, temp, pool);
+            }
+            else
+            {
+              encrypt_zero_asymmetric(public_key_, context_, prev_parms_id,
+                  random, is_ntt_form, temp, pool);
+            }
             if (temp.is_ntt_form() != is_ntt_form)
             {
                 throw invalid_argument("NTT form mismatch");
@@ -195,6 +239,47 @@ namespace seal
                     destination.data() + (i * coeff_count));
             }
             destination.scale() = plain.scale();
+        }
+        else
+        {
+            throw invalid_argument("unsupported scheme");
+        }
+    }
+
+    void Encryptor::encrypt_symmetric(const Plaintext &plain,
+        Ciphertext &destination,
+        MemoryPoolHandle pool)
+    {
+        // Verify parameters.
+        if (!pool)
+        {
+            throw invalid_argument("pool is uninitialized");
+        }
+        // Verify that plain is valid.
+        if (!is_valid_for(plain, context_))
+        {
+            throw invalid_argument("plain is not valid for encryption parameters");
+        }
+        if (!secret_key_set_) {
+            throw invalid_argument("encryptor has not been instantiated with a secret key");
+        }
+
+        auto scheme = context_->key_context_data()->parms().scheme();
+        if (scheme == scheme_type::BFV)
+        {
+            if (plain.is_ntt_form())
+            {
+                throw invalid_argument("plain cannot be in NTT form");
+            }
+
+            encrypt_zero(context_->first_parms_id(), destination, true);
+
+            // Multiply plain by scalar coeff_div_plaintext and reposition if in upper-half.
+            // Result gets added into the c_0 term of ciphertext (c_0,c_1).
+            preencrypt(plain.data(),
+                plain.coeff_count(),
+                *context_->first_context_data(),
+                destination.data());
         }
         else
         {
